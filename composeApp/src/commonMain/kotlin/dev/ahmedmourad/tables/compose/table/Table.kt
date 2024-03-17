@@ -22,6 +22,11 @@ import dev.ahmedmourad.tables.compose.TableDefaults
 import dev.ahmedmourad.tables.compose.TableScope
 import kotlin.math.roundToInt
 
+//class TablsState<T>(content: TableScope<T>.() -> Unit) {
+//    var provider by mutableStateOf(TableScope<T>().apply(content))
+//    val widths = mutableStateListOf()
+//}
+
 @Composable
 fun <T> Table(
     items: List<T>, //TODO: add to compose stable list
@@ -51,23 +56,23 @@ fun <T> Table(
             val constraints = this@BoxWithConstraints.constraints
             var prevConstraints by remember { mutableStateOf(constraints) }
             val widthOfColumns = remember(provider.columns) {
-                val width = constraints.maxWidth
-                    .minus(dividersWidth)
-                    .div(provider.columns.size)
-                    .roundToInt()
-                mutableStateListOf(*List(provider.columns.size) { width }.toTypedArray())
+                val singleWidth = constraints.maxWidth.minus(dividersWidth).div(provider.columns.size)
+                mutableStateListOf(*List(provider.columns.size) { singleWidth / constraints.maxWidth }.toTypedArray())
             }
-            LaunchedEffect(constraints.maxWidth) {
-                val scale = constraints.maxWidth.minus(dividersWidth) / prevConstraints.maxWidth.minus(dividersWidth)
-                widthOfColumns.indices.forEach { index ->
-                    widthOfColumns[index] = widthOfColumns[index].times(scale).roundToInt()
-                }
-                prevConstraints = constraints
-            }
+//            LaunchedEffect(constraints.maxWidth) {
+//                val scale = constraints.maxWidth.minus(dividersWidth) / prevConstraints.maxWidth.minus(dividersWidth)
+//                widthOfColumns.indices.forEach { index ->
+//                    widthOfColumns[index] = widthOfColumns[index].times(scale).roundToInt()
+//                }
+//                prevConstraints = constraints
+//            }
             TableHeader(
                 provider = provider,
                 getColumnWidth = { index -> widthOfColumns[index] },
-                setColumnWidth = { index, width -> widthOfColumns[index] = width }
+                setColumnWidth = { index, width ->
+                    widthOfColumns[index] += width / constraints.maxWidth.minus(dividersWidth)
+                    widthOfColumns[index + 1] -= width / constraints.maxWidth.minus(dividersWidth)
+                }
             )
             HorizontalDivider()
             items.forEachIndexed { rowIndex, item ->
@@ -75,7 +80,10 @@ fun <T> Table(
                     TableRow(
                         provider = provider,
                         getColumnWidth = { index -> widthOfColumns[index] },
-                        setColumnWidth = { index, width -> widthOfColumns[index] = width }
+                        setColumnWidth = { index, width ->
+                            widthOfColumns[index] += width / constraints.maxWidth.minus(dividersWidth)
+                            widthOfColumns[index + 1] -= width / constraints.maxWidth.minus(dividersWidth)
+                        }
                     ) { _, cell ->
                         cell.content(item)
                     }
@@ -91,10 +99,13 @@ fun <T> Table(
 @Composable
 private fun <T> TableHeader(
     provider: TableScope<T>,
-    getColumnWidth: (index: Int) -> Int,
-    setColumnWidth: (index: Int, width: Int) -> Unit,
+    getColumnWidth: (index: Int) -> Float,
+    setColumnWidth: (index: Int, delta: Float) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val provider by rememberUpdatedState(provider)
+    val getColumnWidth by rememberUpdatedState(getColumnWidth)
+    val setColumnWidth by rememberUpdatedState(setColumnWidth)
     TableRow(
         provider = provider,
         getColumnWidth = getColumnWidth,
@@ -108,23 +119,26 @@ private fun <T> TableHeader(
 @Composable
 private fun <T> TableRow(
     provider: TableScope<T>,
-    getColumnWidth: (index: Int) -> Int,
-    setColumnWidth: (index: Int, width: Int) -> Unit,
+    getColumnWidth: (index: Int) -> Float,
+    setColumnWidth: (index: Int, delta: Float) -> Unit,
     modifier: Modifier = Modifier,
     cellContent: @Composable (cellIndex: Int, cell: TableColumn<T>) -> Unit
 ) {
+    val provider by rememberUpdatedState(provider)
+    val getColumnWidth by rememberUpdatedState(getColumnWidth)
+    val setColumnWidth by rememberUpdatedState(setColumnWidth)
+    val cellContent by rememberUpdatedState(cellContent)
     Row(modifier.height(IntrinsicSize.Max)) {
-        val density = LocalDensity.current
         provider.columns.forEachIndexed { cellIndex, cell ->
             key(cellIndex) {
-                Box(Modifier.width(getColumnWidth(cellIndex).toDp(density))) {
+                Box(Modifier.fillMaxWidth(getColumnWidth(cellIndex))) {
                     cellContent(cellIndex, cell)
                 }
                 if (cellIndex != provider.columns.lastIndex) {
                     VerticalDivider(Modifier.draggable(state = rememberDraggableState {
-                        val delta = it.roundToInt()
-                        setColumnWidth(cellIndex, getColumnWidth(cellIndex) + delta)
-                        setColumnWidth(cellIndex + 1, getColumnWidth(cellIndex + 1) - delta)
+                        val delta = it
+                        setColumnWidth(cellIndex, delta)
+//                        setColumnWidth(cellIndex + 1, getColumnWidth(cellIndex + 1) - delta)
                     }, orientation = Orientation.Horizontal))
                 }
             }
