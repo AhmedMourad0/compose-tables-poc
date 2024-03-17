@@ -14,12 +14,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import dev.ahmedmourad.tables.compose.RowStyle
 import dev.ahmedmourad.tables.compose.TableColumn
 import dev.ahmedmourad.tables.compose.TableDefaults
 import dev.ahmedmourad.tables.compose.TableScope
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 @Composable
@@ -44,9 +47,11 @@ fun <T> Table(
     val tableShape = RoundedCornerShape(8.dp)
     BoxWithConstraints(modifier.fillMaxWidth()
         .wrapContentHeight()
+        .widthIn(min = 10.dp * provider.columns.size)
         .clip(tableShape)
         .background(Color.White, tableShape)
-        .border(1.dp, Color.LightGray, tableShape)) {
+        .border(1.dp, Color.LightGray, tableShape)
+    ) {
         Column(Modifier.fillMaxWidth()) {
             val constraints = this@BoxWithConstraints.constraints
             var prevConstraints by remember { mutableStateOf(constraints) }
@@ -57,12 +62,16 @@ fun <T> Table(
                     .roundToInt()
                 mutableStateListOf(*List(provider.columns.size) { width }.toTypedArray())
             }
-            LaunchedEffect(constraints.maxWidth) {
-                val scale = constraints.maxWidth.minus(dividersWidth) / prevConstraints.maxWidth.minus(dividersWidth)
-                widthOfColumns.indices.forEach { index ->
-                    widthOfColumns[index] = widthOfColumns[index].times(scale).roundToInt()
+            LaunchedEffect(prevConstraints.maxWidth, constraints.maxWidth) {
+                withContext(NonCancellable) {
+                    val difference =
+                        constraints.maxWidth.minus(prevConstraints.maxWidth).toFloat().div(provider.columns.size)
+//                val scale = constraints.maxWidth.minus(dividersWidth) / prevConstraints.maxWidth.minus(dividersWidth)
+                    widthOfColumns.indices.forEach { index ->
+                        widthOfColumns[index] = widthOfColumns[index].plus(difference).roundToInt()
+                    }
+                    prevConstraints = constraints
                 }
-                prevConstraints = constraints
             }
             TableHeader(
                 provider = provider,
@@ -95,6 +104,9 @@ private fun <T> TableHeader(
     setColumnWidth: (index: Int, width: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val provider by rememberUpdatedState(provider)
+    val getColumnWidth by rememberUpdatedState(getColumnWidth)
+    val setColumnWidth by rememberUpdatedState(setColumnWidth)
     TableRow(
         provider = provider,
         getColumnWidth = getColumnWidth,
@@ -113,6 +125,10 @@ private fun <T> TableRow(
     modifier: Modifier = Modifier,
     cellContent: @Composable (cellIndex: Int, cell: TableColumn<T>) -> Unit
 ) {
+    val provider by rememberUpdatedState(provider)
+    val getColumnWidth by rememberUpdatedState(getColumnWidth)
+    val setColumnWidth by rememberUpdatedState(setColumnWidth)
+    val cellContent by rememberUpdatedState(cellContent)
     Row(modifier.height(IntrinsicSize.Max)) {
         val density = LocalDensity.current
         provider.columns.forEachIndexed { cellIndex, cell ->

@@ -1,9 +1,7 @@
 package dev.ahmedmourad.tables.compose
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
@@ -30,40 +28,42 @@ fun randomUser() = User(
 
 @Composable
 fun Sample() {
-    val users = remember { List(10) { randomUser() } }
-    var sorters by remember { mutableStateOf("") }
-    var filters by remember { mutableStateOf("") }
-    var show by remember { mutableStateOf(true) }
-    Table(users, Modifier.padding(32.dp).fillMaxSize()) {
-        if (show) {
-            column("id", NumberFilter()) {
+    Column(Modifier.fillMaxSize()) {
+        val users = remember { List(10) { randomUser() } }
+        var sorters by remember { mutableStateOf("") }
+        var filters by remember { mutableStateOf("") }
+        var show by remember { mutableStateOf(true) }
+        Button({ show = !show }) {
+            Text("cccc")
+        }
+        Table(users, Modifier.padding(32.dp).fillMaxWidth()) {
+            if (show) {
+                column("id", NumberFilter()) {
+                    Text(
+                        text = it.id.toString(),
+                        color = Color.Black
+                    )
+                }
+            }
+            column("name") {
                 Text(
-                    text = it.id.toString(),
+                    text = it.name,
+                    color = Color.Black
+                )
+            }
+            column("age") {
+                Text(
+                    text = it.age.toString(),
+                    color = Color.Black
+                )
+            }
+            column("height") {
+                Text(
+                    text = it.height.toString(),
                     color = Color.Black
                 )
             }
         }
-        column("name") {
-            Text(
-                text = it.name,
-                color = Color.Black
-            )
-        }
-        column("age") {
-            Text(
-                text = it.age.toString(),
-                color = Color.Black
-            )
-        }
-        column("height") {
-            Text(
-                text = it.height.toString(),
-                color = Color.Black
-            )
-        }
-    }
-    Button({ show = !show }) {
-        Text("cccc")
     }
 }
 
