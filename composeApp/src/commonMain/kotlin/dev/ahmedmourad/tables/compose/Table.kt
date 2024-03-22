@@ -1,14 +1,21 @@
 package dev.ahmedmourad.tables.compose
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.ahmedmourad.tables.compose.table.Table
+import dev.ahmedmourad.tables.compose.table.TableCell
+import dev.ahmedmourad.tables.compose.table.TableHeaderCell
 import kotlin.random.Random
 
 @Stable
@@ -36,32 +43,37 @@ fun Sample() {
         Button({ show = !show }) {
             Text("cccc")
         }
-        Table(users, Modifier.padding(32.dp).fillMaxWidth()) {
+        Table(
+            itemsProvider = { users },
+            rowStyleProvider = { index, _ ->
+                if (index % 2 == 0) {
+                    TableDefaults.RowStyle
+                } else {
+                    TableDefaults.RowStyle//.copy(background = Color.LightGray)
+                }
+            }, rowDividerStyleProvider = { index ->
+                if (index == 0) {
+                    TableDefaults.RowDividerStyle
+                } else {
+                    TableDefaults.RowDividerStyle//.copy(thickness = 0.dp)
+                }
+            }, columnDividerStyleProvider = {
+                TableDefaults.ColumnDividerStyle//.copy(thickness = 0.dp)
+            }, modifier = Modifier.padding(32.dp).fillMaxWidth()
+        ) {
             if (show) {
                 column("id", NumberFilter()) {
-                    Text(
-                        text = it.id.toString(),
-                        color = Color.Black
-                    )
+                    TableCell(it.id.toString())
                 }
             }
             column("name") {
-                Text(
-                    text = it.name,
-                    color = Color.Black
-                )
+                TableCell(it.name)
             }
             column("age") {
-                Text(
-                    text = it.age.toString(),
-                    color = Color.Black
-                )
+                TableCell(it.age.toString())
             }
             column("height") {
-                Text(
-                    text = it.height.toString(),
-                    color = Color.Black
-                )
+                TableCell(it.height.toString())
             }
         }
     }
@@ -75,17 +87,72 @@ class TableScope<T> {
     fun column(
         name: String,
         filter: TableFilter? = null,
-        content: @Composable (T) -> Unit
+        key: String = name,
+        weight: Float = 1f,
+        cellContent: @Composable (T) -> Unit
     ) {
-        columns.add(TableColumn(name, content))
+        column(
+            key = key,
+            filter = filter,
+            initialWidth = ColumnWidth.Weight(weight),
+            headerContent = { TableHeaderCell(name) },
+            cellContent = cellContent
+        )
     }
+
+    fun column(
+        key: String,
+        filter: TableFilter? = null,
+        initialWidth: ColumnWidth = ColumnWidth.Weight(1f),
+        headerContent: @Composable () -> Unit,
+        cellContent: @Composable (T) -> Unit
+    ) {
+        columns.add(TableColumn(
+            key = key,
+            initialWidth = initialWidth,
+            headerContent = headerContent,
+            cellContent = cellContent
+        ))
+    }
+}
+
+sealed interface ColumnWidth {
+    data class Weight(val value: Float) : ColumnWidth
+    data class Fixed(val value: Dp) : ColumnWidth
+    data object WrapContent
 }
 
 @Immutable
 data class RowStyle(val background: Color = Color.Transparent)
 
 @Immutable
-data class TableColumn<T>(val name: String, val content: @Composable (T) -> Unit)
+data class DividerStyle(
+    val thickness: Dp = 1.dp,
+    val padding: Dp,
+    val color: Color = Color.LightGray
+)
+
+@Stable
+fun DividerStyle.fullWidth(): Dp {
+    return thickness.plus(padding * 2)
+}
+
+@Immutable
+data class TableStyle(
+    val borderThickness: Dp = 1.dp,
+    val borderColor: Color = Color.LightGray,
+    val shape: Shape = RoundedCornerShape(8.dp),
+    val background: Color = Color.White,
+    val horizontalPadding: Dp = 4.dp
+)
+
+@Immutable
+data class TableColumn<T>(
+    val key: String,
+    val initialWidth: ColumnWidth,
+    val headerContent: @Composable () -> Unit,
+    val cellContent: @Composable (T) -> Unit
+)
 
 
 interface TableFilter {
@@ -98,5 +165,9 @@ class NumberFilter : TableFilter {
 
 
 object TableDefaults {
+    val HeaderStyle = RowStyle()
     val RowStyle = RowStyle()
+    val RowDividerStyle = DividerStyle(padding = 0.dp)
+    val ColumnDividerStyle = DividerStyle(padding = 4.dp)
+    val TableStyle = TableStyle()
 }

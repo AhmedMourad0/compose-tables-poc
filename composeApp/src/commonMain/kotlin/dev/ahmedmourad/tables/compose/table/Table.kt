@@ -6,7 +6,9 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -14,134 +16,153 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.ahmedmourad.tables.compose.RowStyle
-import dev.ahmedmourad.tables.compose.TableColumn
-import dev.ahmedmourad.tables.compose.TableDefaults
-import dev.ahmedmourad.tables.compose.TableScope
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
+import dev.ahmedmourad.tables.compose.*
 
 @Composable
 fun <T> Table(
-    items: List<T>, //TODO: add to compose stable list
+    itemsProvider: () -> List<T>, //TODO: add to compose stable list
     modifier: Modifier = Modifier,
-    rowStyle: (index: Int, T) -> RowStyle = { _, _ -> TableDefaults.RowStyle },
+    headerStyle: RowStyle = TableDefaults.HeaderStyle,
+    rowStyleProvider: (index: Int, item: T) -> RowStyle = { _, _ -> TableDefaults.RowStyle },
+    rowDividerStyleProvider: (index: Int) -> DividerStyle = { TableDefaults.RowDividerStyle },
+    columnDividerStyleProvider: (index: Int) -> DividerStyle = { TableDefaults.ColumnDividerStyle },
+    tableStyle: TableStyle = TableDefaults.TableStyle,
     content: TableScope<T>.() -> Unit
 ) {
-    @Suppress("NAME_SHADOWING")
-    val rowStyle by rememberUpdatedState(rowStyle)
-    @Suppress("NAME_SHADOWING")
-    val content by rememberUpdatedState(content)
-//    var provider by remember { mutableStateOf(TableScope<T>().apply(content)) }
+    @Suppress("NAME_SHADOWING") val itemsProvider by rememberUpdatedState(itemsProvider)
+    @Suppress("NAME_SHADOWING") val rowStyleProvider by rememberUpdatedState(rowStyleProvider)
+    @Suppress("NAME_SHADOWING") val rowDividerStyleProvider by rememberUpdatedState(rowDividerStyleProvider)
+    @Suppress("NAME_SHADOWING") val columnDividerStyleProvider by rememberUpdatedState(columnDividerStyleProvider)
+    @Suppress("NAME_SHADOWING") val tableStyle by rememberUpdatedState(tableStyle)
+    @Suppress("NAME_SHADOWING") val content by rememberUpdatedState(content)
     val provider by derivedStateOf(referentialEqualityPolicy()) {
         TableScope<T>().apply(content)
     }
 //    LaunchedEffect(content) {
 //        provider = TableScope<T>().apply(content)
 //    }
-    val dividersWidth = provider.columns.size.minus(1).times(9.dp.toPx(LocalDensity.current))
-    val tableShape = RoundedCornerShape(8.dp)
+    val density = LocalDensity.current
+    val dividersWidth = remember(provider.columns.size, columnDividerStyleProvider, density) {
+        provider.columns.indices.toList().dropLast(1).fold(0.dp) { acc, index ->
+            acc + columnDividerStyleProvider(index).fullWidth()
+        }.toPx(density)
+    }
+    val decorationsWidth = remember(dividersWidth, tableStyle.horizontalPadding, density) {
+        tableStyle.horizontalPadding.times(2).toPx(density).plus(dividersWidth)
+    }
     BoxWithConstraints(modifier.fillMaxWidth()
         .wrapContentHeight()
         .widthIn(min = 10.dp * provider.columns.size)
-        .clip(tableShape)
-        .background(Color.White, tableShape)
-        .border(1.dp, Color.LightGray, tableShape)
+        .clip(tableStyle.shape)
+        .background(tableStyle.background, tableStyle.shape)
+        .border(tableStyle.borderThickness, tableStyle.borderColor, tableStyle.shape)
     ) {
         Column(Modifier.fillMaxWidth()) {
-            val constraints = this@BoxWithConstraints.constraints
+            val constraints = this@BoxWithConstraints.constraints //TODO: LookaheadLayout
             var prevConstraints by remember { mutableStateOf(constraints) }
             val widthOfColumns = remember(provider.columns) {
-                val width = constraints.maxWidth
-                    .minus(dividersWidth)
-                    .div(provider.columns.size)
-                    .roundToInt()
+                val width = constraints.maxWidth.minus(decorationsWidth).div(provider.columns.size)
                 mutableStateListOf(*List(provider.columns.size) { width }.toTypedArray())
             }
             LaunchedEffect(prevConstraints.maxWidth, constraints.maxWidth) {
-                withContext(NonCancellable) {
-                    val difference =
-                        constraints.maxWidth.minus(prevConstraints.maxWidth).toFloat().div(provider.columns.size)
-//                val scale = constraints.maxWidth.minus(dividersWidth) / prevConstraints.maxWidth.minus(dividersWidth)
+                val scale = constraints.maxWidth.minus(decorationsWidth) / prevConstraints.maxWidth.minus(decorationsWidth)
+                if (scale > 0f && scale.isFinite()) {
                     widthOfColumns.indices.forEach { index ->
-                        widthOfColumns[index] = widthOfColumns[index].plus(difference).roundToInt()
+                        widthOfColumns[index] = widthOfColumns[index].times(scale)
                     }
                     prevConstraints = constraints
                 }
             }
-            TableHeader(
+            TableRow(
                 provider = provider,
                 getColumnWidth = { index -> widthOfColumns[index] },
-                setColumnWidth = { index, width -> widthOfColumns[index] = width }
+                setColumnWidth = { index, width -> widthOfColumns[index] = width },
+                styleProvider = { headerStyle },
+                columnDividerStyleProvider = columnDividerStyleProvider,
+                horizontalPadding = { tableStyle.horizontalPadding },
+                cellContent = { _, cell -> cell.headerContent() }
             )
-            HorizontalDivider()
-            items.forEachIndexed { rowIndex, item ->
-                key(rowIndex) {
+            HorizontalDivider(styleProvider = { rowDividerStyleProvider(0) })
+            Box(Modifier.fillMaxWidth()) {
+                val scrollState = rememberLazyListState()
+                Column(Modifier.fillMaxWidth()) {
+                    val items = itemsProvider()
+                    LazyColumn(state = scrollState, modifier = Modifier.fillMaxWidth()) {
+                        itemsIndexed(
+                            items = items,
+                            key = { index, _ -> index },
+                            contentType = { _, _ -> "TableRow" }
+                        ) { rowIndex, item ->
+                            TableRow(
+                                provider = provider,
+                                getColumnWidth = { index -> widthOfColumns[index] },
+                                setColumnWidth = { index, width -> widthOfColumns[index] = width },
+                                styleProvider = { rowStyleProvider(rowIndex, item) },
+                                columnDividerStyleProvider = columnDividerStyleProvider,
+                                horizontalPadding = { tableStyle.horizontalPadding },
+                                cellContent = { _, cell -> cell.cellContent(item) }
+                            )
+                            HorizontalDivider(styleProvider = { rowDividerStyleProvider(rowIndex + 1) })
+                        }
+                    }
                     TableRow(
                         provider = provider,
                         getColumnWidth = { index -> widthOfColumns[index] },
-                        setColumnWidth = { index, width -> widthOfColumns[index] = width }
-                    ) { _, cell ->
-                        cell.content(item)
-                    }
-                    if (rowIndex != items.lastIndex) {
-                        HorizontalDivider()
-                    }
+                        setColumnWidth = { index, width -> widthOfColumns[index] = width },
+                        styleProvider = { TableDefaults.RowStyle },
+                        columnDividerStyleProvider = columnDividerStyleProvider,
+                        horizontalPadding = { tableStyle.horizontalPadding },
+                        cellContent = { _, _ ->  },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
+                VerticalScrollbar(scrollState)
             }
         }
-    }
-}
-
-@Composable
-private fun <T> TableHeader(
-    provider: TableScope<T>,
-    getColumnWidth: (index: Int) -> Int,
-    setColumnWidth: (index: Int, width: Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val provider by rememberUpdatedState(provider)
-    val getColumnWidth by rememberUpdatedState(getColumnWidth)
-    val setColumnWidth by rememberUpdatedState(setColumnWidth)
-    TableRow(
-        provider = provider,
-        getColumnWidth = getColumnWidth,
-        setColumnWidth = setColumnWidth,
-        modifier = modifier
-    ) { _, cell ->
-        Text(cell.name)
     }
 }
 
 @Composable
 private fun <T> TableRow(
     provider: TableScope<T>,
-    getColumnWidth: (index: Int) -> Int,
-    setColumnWidth: (index: Int, width: Int) -> Unit,
+    getColumnWidth: (index: Int) -> Float,
+    setColumnWidth: (index: Int, width: Float) -> Unit,
+    styleProvider: () -> RowStyle,
+    columnDividerStyleProvider: (index: Int) -> DividerStyle,
+    horizontalPadding: () -> Dp,
     modifier: Modifier = Modifier,
     cellContent: @Composable (cellIndex: Int, cell: TableColumn<T>) -> Unit
 ) {
-    val provider by rememberUpdatedState(provider)
-    val getColumnWidth by rememberUpdatedState(getColumnWidth)
-    val setColumnWidth by rememberUpdatedState(setColumnWidth)
-    val cellContent by rememberUpdatedState(cellContent)
-    Row(modifier.height(IntrinsicSize.Max)) {
-        val density = LocalDensity.current
+    @Suppress("NAME_SHADOWING") val provider by rememberUpdatedState(provider)
+    @Suppress("NAME_SHADOWING") val getColumnWidth by rememberUpdatedState(getColumnWidth)
+    @Suppress("NAME_SHADOWING") val setColumnWidth by rememberUpdatedState(setColumnWidth)
+    @Suppress("NAME_SHADOWING") val styleProvider by rememberUpdatedState(styleProvider)
+    @Suppress("NAME_SHADOWING") val columnDividerStyleProvider by rememberUpdatedState(columnDividerStyleProvider)
+    @Suppress("NAME_SHADOWING") val cellContent by rememberUpdatedState(cellContent)
+    val style = styleProvider()
+    Row(modifier = modifier
+        .height(IntrinsicSize.Max)
+        .background(style.background)
+        .padding(horizontal = horizontalPadding())
+    ) {
         provider.columns.forEachIndexed { cellIndex, cell ->
             key(cellIndex) {
+                val density = LocalDensity.current
                 Box(Modifier.width(getColumnWidth(cellIndex).toDp(density))) {
                     cellContent(cellIndex, cell)
                 }
                 if (cellIndex != provider.columns.lastIndex) {
-                    VerticalDivider(Modifier.draggable(state = rememberDraggableState {
-                        val delta = it.roundToInt()
-                        setColumnWidth(cellIndex, getColumnWidth(cellIndex) + delta)
-                        setColumnWidth(cellIndex + 1, getColumnWidth(cellIndex + 1) - delta)
-                    }, orientation = Orientation.Horizontal))
+                    VerticalDivider(
+                        styleProvider = { columnDividerStyleProvider(cellIndex) },
+                        modifier = Modifier.draggable(state = rememberDraggableState {
+                            val delta = it
+                            setColumnWidth(cellIndex, getColumnWidth(cellIndex) + delta)
+                            setColumnWidth(cellIndex + 1, getColumnWidth(cellIndex + 1) - delta)
+                        }, orientation = Orientation.Horizontal)
+                    )
                 }
             }
         }
@@ -149,16 +170,47 @@ private fun <T> TableRow(
 }
 
 @Composable
-private fun HorizontalDivider(modifier: Modifier = Modifier) {
-    Spacer(modifier.fillMaxWidth().height(1.dp).background(Color.LightGray))
+private fun HorizontalDivider(
+    styleProvider: () -> DividerStyle,
+    modifier: Modifier = Modifier
+) {
+    val style = styleProvider()
+    Spacer(modifier
+        .fillMaxWidth()
+        .padding(vertical = style.padding)
+        .height(style.thickness)
+        .background(style.color)
+    )
 }
 
 @Composable
-private fun VerticalDivider(modifier: Modifier = Modifier) {
+private fun VerticalDivider(
+    styleProvider: () -> DividerStyle,
+    modifier: Modifier = Modifier
+) {
+    val style = styleProvider()
     Spacer(modifier.fillMaxHeight()
         .pointerHoverIcon(PointerIcon.Crosshair)
-        .padding(horizontal = 4.dp)
-        .width(1.dp)
-        .background(Color.LightGray)
+        .padding(horizontal = style.padding)
+        .width(style.thickness)
+        .background(style.color)
+    )
+}
+
+@Composable
+fun TableHeaderCell(name: String, modifier: Modifier = Modifier) {
+    TableCell(
+        text = name,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun TableCell(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = Color.Black,
+//        textAlign = TextAlign.Center,
+        modifier = modifier.fillMaxSize().background(Color.White)
     )
 }

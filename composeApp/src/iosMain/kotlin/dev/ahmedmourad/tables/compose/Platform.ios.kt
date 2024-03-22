@@ -1,9 +1,11 @@
 package dev.ahmedmourad.tables.compose
 
-import platform.UIKit.UIDevice
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
-class IOSPlatform: Platform {
-    override val name: String = UIDevice.currentDevice.systemName() + " " + UIDevice.currentDevice.systemVersion
+@Composable
+actual fun BoxScope.VerticalScrollbar(state: LazyListState, modifier: Modifier) {
+    //no-op
 }
-
-actual fun getPlatform(): Platform = IOSPlatform()

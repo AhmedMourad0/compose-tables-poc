@@ -5,4 +5,6 @@ import androidx.compose.ui.unit.Dp
 
 fun Int.toDp(density: Density) = with(density) { this@toDp.toDp() }
 
+fun Float.toDp(density: Density) = with(density) { this@toDp.toDp() }
+
 fun Dp.toPx(density: Density) = with(density) { this@toPx.toPx() }

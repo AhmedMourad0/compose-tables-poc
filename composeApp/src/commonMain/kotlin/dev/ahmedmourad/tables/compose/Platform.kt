@@ -1,7 +1,9 @@
 package dev.ahmedmourad.tables.compose
 
-interface Platform {
-    val name: String
-}
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
-expect fun getPlatform(): Platform
+@Composable
+expect fun BoxScope.VerticalScrollbar(state: LazyListState, modifier: Modifier = Modifier)

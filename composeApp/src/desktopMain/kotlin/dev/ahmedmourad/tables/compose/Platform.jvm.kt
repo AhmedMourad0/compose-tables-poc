@@ -1,7 +1,17 @@
 package dev.ahmedmourad.tables.compose
 
-class JVMPlatform: Platform {
-    override val name: String = "Java ${System.getProperty("java.version")}"
-}
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 
-actual fun getPlatform(): Platform = JVMPlatform()
+@Composable
+actual fun BoxScope.VerticalScrollbar(state: LazyListState, modifier: Modifier) {
+    androidx.compose.foundation.VerticalScrollbar(
+        adapter = rememberScrollbarAdapter(state),
+        modifier = modifier.align(Alignment.CenterEnd).fillMaxHeight()
+    )
+}

@@ -1,7 +1,11 @@
 package dev.ahmedmourad.tables.compose
 
-class WasmPlatform: Platform {
-    override val name: String = "Web with Kotlin/Wasm"
-}
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
-actual fun getPlatform(): Platform = WasmPlatform()
+@Composable
+actual fun BoxScope.VerticalScrollbar(state: LazyListState, modifier: Modifier) {
+    //no-op
+}
